@@ -1,0 +1,2 @@
+#!/bin/php
+<?php echo pack("H*" , preg_replace(array("/^0x/i","/[^0-9A-F]/i"),"",file_get_contents("php://stdin"))); ?>

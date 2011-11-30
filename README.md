@@ -39,3 +39,18 @@ Also work with less strict rules:
     gcc *.c -o huffman
 
 *main.c is only a test program*
+
+## bin2blob & blob2bin
+
+PHP scripts to convert sql blob data (0xAF49...) to binary data and vice versa.
+
+Both scripts can be replaced by inline php commands:
+
+* bin2blob:
+
+    php -r 'echo "0x".bin2hex(file_get_contents("php://stdin"));'
+
+* blob2bin:
+
+    php -r 'echo pack("H*" , preg_replace(array("/^0x/i","/[^0-9A-F]/i"),"",file_get_contents("php://stdin")));'
+
