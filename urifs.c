@@ -304,7 +304,7 @@ static int urifs_read(const char *path, char *buf, size_t size, off_t offset, st
 	if((size + offset) >= fd->size)	{
 		bytes = fd->size - offset;
 	} else {
-		bytes = fd->size;
+		bytes = size;
 	}
 
 	asprintf(&range, "%llu-%llu", (unsigned long long)offset, (unsigned long long)offset+(unsigned long long)bytes-1);
