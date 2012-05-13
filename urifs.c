@@ -279,6 +279,7 @@ static int urifs_open(const char *path, struct fuse_file_info *fi)
 
 			return 0;
 		}
+		xfree(fd->uri);
 		xfree(fd);
 		return -ENOENT;
 	}
@@ -306,7 +307,7 @@ static int urifs_read(const char *path, char *buf, size_t size, off_t offset, st
 		bytes = fd->size;
 	}
 
-	asprintf(&range, "%llu-%llu", (unsigned long long)offset, (unsigned long long)offset+(unsigned long long)bytes);
+	asprintf(&range, "%llu-%llu", (unsigned long long)offset, (unsigned long long)offset+(unsigned long long)bytes-1);
 	DEBUG("Range: %s (bytes: %llu)", range, (unsigned long long)bytes);
 
 	buffer.data = buf;
@@ -379,10 +380,6 @@ int urifs_flush(const char *path, struct fuse_file_info *fi)
 int urifs_statfs(const char *path, struct statvfs *stats)
 {
 	DEBUG("here")
-	// Reload xml file so that we can reload fs with a statfs call.
-	roxml_close(fuse_get_context()->private_data);
-	fuse_get_context()->private_data = roxml_load_doc(source_xml);
-
 	stats->f_bsize = 0;
 	stats->f_frsize = 0;
 	stats->f_blocks = 0;
