@@ -63,6 +63,7 @@ class Decimal {
 
 class IRCClient {
     private MainLoop loop;
+    private MainLoop recvloop;
     private SocketConnection conn;
     private unowned Thread<void*> thread;
     public string host {get; set;}
@@ -81,7 +82,7 @@ class IRCClient {
         try {
             thread = Thread.create<void*>( thread_recv, true );
         } catch(ThreadError e) {
-            stderr.printf ("%s\n", e.message);
+            stderr.printf ("ERROR1%s\n", e.message);
         }
     }
 
@@ -90,7 +91,7 @@ class IRCClient {
     }
 
     private void* thread_recv() {
-        var recvloop = new MainLoop();
+        recvloop = new MainLoop();
         recv.begin();
         recvloop.run();
 	    return null;
@@ -123,20 +124,32 @@ class IRCClient {
                 if(answer != null)
                 {
                     print ("(recv) %s\n", answer);
-                    if(answer.has_prefix("PING")) {
-                        this.write("%s\n".printf(answer.replace("PING","PONG")));
+                    if(answer.has_prefix("ERROR")) {
+                        print("We got an error!\n");
+                        this.recvloop.quit();
+                        break;
+                    } else if(answer.has_prefix("PING")) {
+                        this.write("%s\r\n".printf(answer.replace("PING","PONG")));
                     } else if(Regex.match_simple(":[^ ]* 376 .*",answer)) {
-                        this.write("JOIN %s %s\n".printf(this.channel, this.key));
+                        this.write("JOIN %s %s\r\n".printf(this.channel, this.key));
                     } else if(Regex.match_simple(":[^ ]* PRIVMSG [^ ]* :.*$",answer)) {
                         var priv = Regex.split_simple(":([^! ]*)![^ ]* PRIVMSG ([^ ]*) :(.*)",answer);
                         print("(%s => %s) %s\n",priv[1],priv[2],priv[3]);
-                        if(Regex.match_simple("^\\!fib [0-9]{0,5}$",priv[3]))
+                        if(Regex.match_simple("^\\!fib [0-9]*$",priv[3]))
                         {
-                            var fibnum = Regex.split_simple("\\!fib ([0-9]*)",priv[3])[1];
-                            Decimal fibo = Fibonacci(int.parse(fibnum));
+                            int fibnum = int.parse(Regex.split_simple("\\!fib ([0-9]*)",priv[3])[1]);
+                            this.write("PRIVMSG %s :Calculating the %dth Fibonacci number...\r\n".printf(this.channel, fibnum));
+                            Decimal fibo = Fibonacci(fibnum);
                             string fib = fibo.to_string();
-                            //this.write("PRIVMSG %s :The %dth Fibonacci number have %d digits and it's md5 sum is %s :p\n".printf(this.channel, int.parse(fibnum), fib.length, md5sum(fib)));
-                            this.write("PRIVMSG %s :%s\n".printf(this.channel, fib));
+                            //this.write("PRIVMSG %s :The %dth Fibonacci number have %d digits and it's md5 sum is %s :p\r\n".printf(this.channel, int.parse(fibnum), fib.length, md5sum(fib)));
+                            int msg_length = 400;
+                            while(fib.length >= msg_length)
+                            {
+                                this.write("PRIVMSG %s :%s...\r\n".printf(this.channel, fib.slice(0,msg_length)));
+                                fib = fib.splice(0,msg_length);
+                            }
+                            this.write("PRIVMSG %s :%s\r\n".printf(this.channel, fib));
+                            this.write("PRIVMSG %s :Done.\r\n".printf(this.channel));
                         }
                     }
                 }
@@ -199,6 +212,7 @@ static int main (string[] args) {
     nickname="fib%d".printf(Random.int_range (1, 99));
     username="fib";
     realname="Fibonacci bot";
+    int delay=1;
     try {
         var opt_context = new OptionContext("- IRC bot");
         opt_context.set_help_enabled(true);
@@ -211,22 +225,28 @@ static int main (string[] args) {
     if(host!="")
     {
         try {
-            var irc = new IRCClient ();
-            irc.host = host;
-            irc.channel = channel;
-            irc.key = key;
-            irc.nickname = nickname;
-            irc.port = port;
-            irc.start ();
-            if(password!=null) {
-                string passreq = "PASS %s\n".printf(password);
-                irc.write (passreq);
+            while(true)
+            {
+                var irc = new IRCClient ();
+                irc.host = host;
+                irc.channel = channel;
+                irc.key = key;
+                irc.nickname = nickname;
+                irc.port = port;
+                irc.start ();
+                if(password!=null) {
+                    string passreq = "PASS %s\r\n".printf(password);
+                    irc.write (passreq);
+                }
+                string nickreq = "NICK %s\r\n".printf(nickname);
+                irc.write (nickreq);
+                string userreq = "USER %s 8 * :%s\r\n".printf(username,realname);
+                irc.write (userreq);
+                irc.stop();
+                print("Waiting %ds before reconnecting",delay);
+                Thread.usleep(1000000*delay);
+                delay<<=1;
             }
-            string nickreq = "NICK %s\n".printf(nickname);
-            irc.write (nickreq);
-            string userreq = "USER %s 8 * :%s\n".printf(username,realname);
-            irc.write (userreq);
-            irc.stop();
         } catch (Error e) {
             stderr.printf ("%s\n", e.message);
             return -1;
