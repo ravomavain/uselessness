@@ -19,7 +19,7 @@
  *
  * Requirement: libfuse, libcurl and libxml2
  *
- * Compile with: gcc -O3 -o urifs urifs.c -Wall -ansi -W -std=c99 -D_GNU_SOURCE -Wno-unused-parameter `pkg-config --cflags --libs libxml-2.0 fuse libcurl`
+ * Compile with: gcc -O3 -o urifs urifs.c -Wall -ansi -W -std=c99 -D_GNU_SOURCE `pkg-config --cflags --libs libxml-2.0 fuse libcurl`
  *
  */
 
@@ -117,7 +117,6 @@ static size_t curl_get_callback(void *contents, size_t size, size_t nmemb, void 
 static int urifs_getattr(const char *path, struct stat *stbuf)
 {
 	DEBUG("here")
-	int nb;
 	xmlChar *value;
 	xmlNodeSetPtr nodes;
 	xmlNodePtr node;
@@ -129,7 +128,7 @@ static int urifs_getattr(const char *path, struct stat *stbuf)
 
 	DEBUG("xpath: %s", xpath);
 
-	xpathObj = xmlXPathEvalExpression(xpath, fuse_get_context()->private_data);
+	xpathObj = xmlXPathEvalExpression((xmlChar*)xpath, fuse_get_context()->private_data);
 	xfree(xpath);
 	if(xpathObj == NULL)
 		return -ENOENT;
@@ -141,7 +140,7 @@ static int urifs_getattr(const char *path, struct stat *stbuf)
 		DEBUG("%d nodes found", nodes->nodeNr)
 		node = nodes->nodeTab[0];
 
-		if(strcmp(node->name, "dir")==0 || strcmp(node->name, "root")==0)
+		if(strcmp((char*)node->name, "dir")==0 || strcmp((char*)node->name, "root")==0)
 		{
 			DEBUG("dir")
 			stbuf->st_mode = S_IFDIR | S_IXUSR | S_IXGRP | S_IXOTH;
@@ -165,53 +164,53 @@ static int urifs_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_mtime = 0;
 		stbuf->st_ctime = 0;
 
-		value = xmlGetProp(node, "size");
+		value = xmlGetProp(node, (xmlChar*)"size");
 		if(value)
 		{
-			stbuf->st_blocks = stbuf->st_size = atoll(value);
+			stbuf->st_blocks = stbuf->st_size = atoll((char*)value);
 			xmlFree(value);
 		}
 
-		value = xmlGetProp(node, "uid");
+		value = xmlGetProp(node, (xmlChar*)"uid");
 		if(value)
 		{
-			stbuf->st_blocks = stbuf->st_size = atoll(value);
+			stbuf->st_blocks = stbuf->st_size = atoll((char*)value);
 			xmlFree(value);
 		}
 
-		value = xmlGetProp(node, "gid");
+		value = xmlGetProp(node, (xmlChar*)"gid");
 		if(value)
 		{
-			stbuf->st_uid = atoi(value);
+			stbuf->st_uid = atoi((char*)value);
 			xmlFree(value);
 		}
 
-		value = xmlGetProp(node, "mode");
+		value = xmlGetProp(node, (xmlChar*)"mode");
 		if(value)
 		{
 			stbuf->st_mode &= S_IFMT;
-			stbuf->st_mode |= strtol (value, NULL, 8);
+			stbuf->st_mode |= strtol ((char*)value, NULL, 8);
 			xmlFree(value);
 		}
 
-		value = xmlGetProp(node, "ctime");
+		value = xmlGetProp(node, (xmlChar*)"ctime");
 		if(value)
 		{
-			stbuf->st_ctime = atoi(value);
+			stbuf->st_ctime = atoi((char*)value);
 			xmlFree(value);
 		}
 
-		value = xmlGetProp(node, "atime");
+		value = xmlGetProp(node, (xmlChar*)"atime");
 		if(value)
 		{
-			stbuf->st_atime = atoi(value);
+			stbuf->st_atime = atoi((char*)value);
 			xmlFree(value);
 		}
 
-		value = xmlGetProp(node, "mtime");
+		value = xmlGetProp(node, (xmlChar*)"mtime");
 		if(value)
 		{
-			stbuf->st_mtime = atoi(value);
+			stbuf->st_mtime = atoi((char*)value);
 			xmlFree(value);
 		}
 		DEBUG("mode: %d", stbuf->st_mode)
@@ -229,6 +228,8 @@ static int urifs_getattr(const char *path, struct stat *stbuf)
 
 static int urifs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
+	(void)offset;
+	(void)fi;
 	DEBUG("here")
 	DEBUG("trying '%s'",path);
 	int i;
@@ -236,7 +237,6 @@ static int urifs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, of
 	char *xpath;
 	xmlChar *value;
 	xmlNodeSetPtr nodes;
-	xmlNodePtr node;
 	xmlXPathObjectPtr xpathObj;
 
 	char *tmp = xpath_from_path(path);
@@ -252,7 +252,7 @@ static int urifs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, of
 
 	DEBUG("xpath: %s", xpath);
 
-	xpathObj = xmlXPathEvalExpression(xpath, fuse_get_context()->private_data);
+	xpathObj = xmlXPathEvalExpression((xmlChar*)xpath, fuse_get_context()->private_data);
 	xfree(xpath);
 	if(xpathObj == NULL)
 		return -ENOENT;
@@ -268,10 +268,10 @@ static int urifs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, of
 		filler(buf, "..", NULL, 0);
 		for(i=0;i<nb;i++)
 		{
-			value = xmlGetProp(nodes->nodeTab[i], "name");
+			value = xmlGetProp(nodes->nodeTab[i], (xmlChar*)"name");
 			if(value)
 			{
-				filler(buf, value, NULL, 0);
+				filler(buf, (char*)value, NULL, 0);
 				xmlFree(value);
 			}
 		}
@@ -288,6 +288,8 @@ static int urifs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, of
 
 static int urifs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
+	(void)mode;
+	(void)fi;
 	DEBUG("here %s", path)
 	return -ENOENT;
 }
@@ -308,7 +310,7 @@ static int urifs_open(const char *path, struct fuse_file_info *fi)
 
 	DEBUG("xpath: %s", xpath);
 
-	xpathObj = xmlXPathEvalExpression(xpath, fuse_get_context()->private_data);
+	xpathObj = xmlXPathEvalExpression((xmlChar*)xpath, fuse_get_context()->private_data);
 	xfree(xpath);
 	if(xpathObj == NULL)
 		return -ENOENT;
@@ -324,15 +326,15 @@ static int urifs_open(const char *path, struct fuse_file_info *fi)
 		fd->uri = NULL;
 		if (fd)
 		{
-			value = xmlGetProp(node, "size");
+			value = xmlGetProp(node, (xmlChar*)"size");
 			if(value)
 			{
-				fd->size = atoll(value);
+				fd->size = atoll((char*)value);
 				xmlFree(value);
-				value = xmlGetProp(node, "uri");
+				value = xmlGetProp(node, (xmlChar*)"uri");
 				if(value)
 				{
-					fd->uri = strdup(value);
+					fd->uri = strdup((char*)value);
 					xmlFree(value);
 					if(fd->uri)
 					{
@@ -362,6 +364,7 @@ static int urifs_open(const char *path, struct fuse_file_info *fi)
 
 static int urifs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
+	(void)path;
 	DEBUG("here")
 	size_t bytes;
 	uri_fd *fd;
@@ -381,7 +384,8 @@ static int urifs_read(const char *path, char *buf, size_t size, off_t offset, st
 		bytes = size;
 	}
 
-	asprintf(&range, "%llu-%llu", (unsigned long long)offset, (unsigned long long)offset+(unsigned long long)bytes-1);
+	if(asprintf(&range, "%llu-%llu", (unsigned long long)offset, (unsigned long long)offset+(unsigned long long)bytes-1)  == -1)
+		return -ENOENT;
 	DEBUG("Range: %s (bytes: %llu)", range, (unsigned long long)bytes);
 
 	buffer.data = buf;
@@ -405,18 +409,27 @@ static int urifs_read(const char *path, char *buf, size_t size, off_t offset, st
 
 static int urifs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
+	(void)path;
+	(void)buf;
+	(void)size;
+	(void)offset;
+	(void)fi;
 	DEBUG("here")
 	return -ENOENT;
 }
 
 static int urifs_fsync(const char *path, int datasync, struct fuse_file_info *fi)
 {
+	(void)path;
+	(void)datasync;
+	(void)fi;
 	DEBUG("here")
 	return -ENOENT;
 }
 
 static int urifs_release(const char *path, struct fuse_file_info *fi)
 {
+	(void)path;
 	DEBUG("here")
 	if(fi->fh > MAX_ENTRIES) { return -ENOENT; }
 
@@ -429,6 +442,7 @@ static int urifs_release(const char *path, struct fuse_file_info *fi)
 
 void urifs_cleanup(void *data)
 {
+	(void)data;
 	DEBUG("here")
 	xmlXPathContextPtr xpathCtx = fuse_get_context()->private_data;
 	xmlDocPtr doc = xpathCtx->doc;
@@ -451,12 +465,15 @@ void urifs_cleanup(void *data)
 
 int urifs_flush(const char *path, struct fuse_file_info *fi)
 {
+	(void)path;
+	(void)fi;
 	DEBUG("here")
 	return -ENOENT;
 }
 
 int urifs_statfs(const char *path, struct statvfs *stats)
 {
+	(void)path;
 	DEBUG("here")
 	stats->f_bsize = 0;
 	stats->f_frsize = 0;
@@ -471,36 +488,47 @@ int urifs_statfs(const char *path, struct statvfs *stats)
 
 int urifs_truncate(const char *path, off_t size)
 {
+	(void)path;
+	(void)size;
 	DEBUG("here")
 	return -ENOENT;
 }
 
 int urifs_ftruncate(const char *path, off_t size, struct fuse_file_info *fi)
 {
+	(void)path;
+	(void)size;
+	(void)fi;
 	DEBUG("here")
 	return -ENOENT;
 }
 
 int urifs_unlink(const char *path)
 {
+	(void)path;
 	DEBUG("here")
 	return -ENOENT;
 }
 
 int urifs_rename(const char *from, const char *to)
 {
+	(void)from;
+	(void)to;
 	DEBUG("here")
 	return -ENOENT;
 }
 
 int urifs_mkdir(const char *dir, mode_t ignored)
 {
+	(void)dir;
+	(void)ignored;
 	DEBUG("here")
 	return -ENOENT;
 }
 
 void *urifs_init(struct fuse_conn_info *conn)
 {
+	(void)conn;
 	DEBUG("here")
 	int i;
 	xmlDocPtr doc;
@@ -554,6 +582,8 @@ static struct fuse_operations urifs_oper = {
 
 static int urifs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outargs)
 {
+	(void)data;
+	(void)outargs;
 	DEBUG("here")
 	static int num = 0;
 
