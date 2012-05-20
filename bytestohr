@@ -1,0 +1,18 @@
+#!/bin/bash
+# Convert input parameter (number of bytes) 
+# to Human Readable form
+#
+
+SLIST=(bytes Ko Mo Go To Po Eo Zo Yo)
+
+POWER=0
+VAL=$( echo "scale=2; $1 / 1" | bc)
+VINT=$( echo $VAL / 1024 | bc )
+while [[ $VINT != 0 && $POWER != 8 ]]
+do
+	let POWER=POWER+1
+	VAL=$( echo "scale=2; $VAL / 1024" | bc)
+	VINT=$( echo $VAL / 1024 | bc )
+done
+
+echo $VAL ${SLIST[$POWER]}
