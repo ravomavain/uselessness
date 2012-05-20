@@ -53,7 +53,7 @@ FILE *debug_f = NULL;
 
 static inline void xfree(void *p)
 {
-	if(p != NULL)
+	if(p)
 		free(p);
 	p=NULL;
 }
@@ -61,20 +61,32 @@ static inline void xfree(void *p)
 static char *xpath_from_path(const char *path)
 {
 	char *p;
-	char *xpath;
+	char *xpath = NULL;
 	size_t len = strlen(path);
 	char *tmp = (char*)malloc(len+1);
+	if (!tmp)
+		return NULL;
 	strncpy(tmp, path, len+1);
-	asprintf(&xpath, "/root");
+	if (asprintf(&xpath, "/root") == -1)
+	{
+		xfree(tmp);
+		return NULL;
+	}
 	p = strtok(tmp, "/");
 	while( p != NULL )
 	{
 		char *new;
-		asprintf(&new, "%s/*[@name=\"%s\"]", xpath, p);
+		if (asprintf(&new, "%s/*[@name=\"%s\"]", xpath, p) == -1)
+		{
+			xfree(xpath);
+			xfree(tmp);
+			return NULL;
+		}
 		xfree(xpath);
 		xpath = new;
 		p = strtok(NULL, "/");
 	}
+	xfree(tmp);
 	return xpath;
 }
 
@@ -106,6 +118,9 @@ static int urifs_getattr(const char *path, struct stat *stbuf)
 	node_t *a = NULL;
 	node_t *root = fuse_get_context()->private_data;
 	char *xpath = xpath_from_path(path);
+
+	if (!xpath)
+		return -ENOENT;
 
 	DEBUG("trying '%s'",path);
 	node_t **ans = roxml_xpath(root, xpath, &nb);
@@ -201,6 +216,8 @@ static int urifs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, of
 	node_t *n = NULL;
 	node_t *root = fuse_get_context()->private_data;
 	char *xpath = xpath_from_path(path);
+	if (!xpath)
+		return -ENOENT;
 	node_t **ans = roxml_xpath(root, xpath, &nb);
 	DEBUG("xpath: %s  -> %d nodes found",xpath,nb);
 	xfree(xpath);
@@ -244,6 +261,8 @@ static int urifs_open(const char *path, struct fuse_file_info *fi)
 	char *value;
 	node_t *root = fuse_get_context()->private_data;
 	char *xpath = xpath_from_path(path);
+	if (!xpath)
+		return -ENOENT;
 	node_t **ans = roxml_xpath(root, xpath, &nb);
 	DEBUG("xpath: %s  -> %d nodes found",xpath,nb);
 	xfree(xpath);
@@ -252,6 +271,8 @@ static int urifs_open(const char *path, struct fuse_file_info *fi)
 		node_t *n = ans[0];
 		roxml_release(ans);
 		fd = (uri_fd*)malloc(sizeof(uri_fd));
+		if(!fd)
+			return -ENOENT;
 		if( (a = roxml_get_attr(n, "size", 0)) == NULL)
 		{
 			xfree(fd);
@@ -271,6 +292,11 @@ static int urifs_open(const char *path, struct fuse_file_info *fi)
 		value = roxml_get_content(a, NULL, 0, NULL);
 		fd->uri = strdup(value);
 		roxml_release(value);
+		if(!fd->uri)
+		{
+			xfree(fd);
+			return -ENOENT;
+		}
 
 		while((i < MAX_ENTRIES)&&(opened_files[i]))	{ i++; } 
 		if(i < MAX_ENTRIES)	{
