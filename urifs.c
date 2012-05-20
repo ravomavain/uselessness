@@ -321,6 +321,7 @@ static int urifs_open(const char *path, struct fuse_file_info *fi)
 		node = nodes->nodeTab[0];
 
 		fd = (uri_fd*)malloc(sizeof(uri_fd));
+		fd->uri = NULL;
 		if (fd)
 		{
 			value = xmlGetProp(node, "size");
@@ -422,6 +423,7 @@ static int urifs_release(const char *path, struct fuse_file_info *fi)
 	DEBUG("closing file %lu",fi->fh)
 	xfree(opened_files[fi->fh]->uri);
 	xfree(opened_files[fi->fh]);
+	opened_files[fi->fh] = NULL;
 	return 0;
 }
 
@@ -433,7 +435,7 @@ void urifs_cleanup(void *data)
 	int i;
 	for(i=0; i<MAX_ENTRIES; i++)
 	{
-		if(opened_files[i])
+		if(opened_files[i]!=NULL)
 		{
 			xfree(opened_files[i]->uri);
 			xfree(opened_files[i]);
@@ -500,6 +502,7 @@ int urifs_mkdir(const char *dir, mode_t ignored)
 void *urifs_init(struct fuse_conn_info *conn)
 {
 	DEBUG("here")
+	int i;
 	xmlDocPtr doc;
 	xmlXPathContextPtr xpathCtx;
 
@@ -521,6 +524,8 @@ void *urifs_init(struct fuse_conn_info *conn)
 	}
 
 	opened_files = (uri_fd**)malloc(sizeof(uri_fd*)*MAX_ENTRIES);
+	for(i=0;i<MAX_ENTRIES;i++)
+		opened_files[i] = NULL;
 
 	curl_global_init(CURL_GLOBAL_ALL);
 
